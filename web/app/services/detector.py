@@ -42,7 +42,7 @@ class VideoDetector:
         output_dir: str,
         job_id: str,
         progress_callback: Optional[Callable[[float], None]] = None,
-        conf_threshold: float = 0.5
+        conf_threshold: float = 0.3
     ) -> Dict[str, Any]:
         """
         Processa vídeo e gera resultados.
@@ -168,7 +168,7 @@ class VideoDetector:
             "summary": summary
         }
 
-    def detect_frame(self, frame, conf_threshold: float = 0.5) -> Dict[str, Any]:
+    def detect_frame(self, frame, conf_threshold: float = 0.3) -> Dict[str, Any]:
         """
         Detecta objetos em um único frame.
 
