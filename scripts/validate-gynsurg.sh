@@ -66,6 +66,9 @@ echo "✅ Modelo: $MODEL_PATH"
 # Ativar ambiente virtual
 source "$VENV_DIR/bin/activate"
 
+# Filtrar warnings do NNPACK (irrelevante quando usando GPU)
+filter_nnpack() { grep -v "NNPACK.cpp" || true; }
+
 # Processar clips de bleeding
 echo ""
 echo "[2/5] Processando clips de BLEEDING..."
@@ -90,7 +93,7 @@ for clip in $BLEEDING_CLIPS; do
         save_txt=True \
         save_conf=True \
         conf=0.3 \
-        verbose=False
+        verbose=False 2>&1 | filter_nnpack
 done
 
 # Processar clips de non-bleeding
@@ -116,7 +119,7 @@ for clip in $NON_BLEEDING_CLIPS; do
         save_txt=True \
         save_conf=True \
         conf=0.3 \
-        verbose=False
+        verbose=False 2>&1 | filter_nnpack
 done
 
 # Gerar relatório de validação
