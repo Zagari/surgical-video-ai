@@ -245,12 +245,18 @@ terraform/
 
 ## Documentação
 
-- [Checkpoint do Servidor](docs/CHECKPOINT-SERVIDOR.md) - Instruções para execução no servidor
-- [Plano de Implementação](docs/plano-implementacao-video-analysis.md) - Plano original
+Para detalhes sobre a implementação do Sistema de Análise de Vídeo, consulte o relatório técnico:
+
+📄 [docs/relatorio_.pdf](docs/relatorio_.pdf)
+
+▶️ [Vídeo demonstrativo]()
 
 ## Equipe
 
-FIAP - Pós-Graduação em IA para Devs
+- Adriana Martins de Souza - RM 368050
+- Diego Oliveira da Silva - RM 367964
+- Eduardo Nicola F. Zagari - RM 368021
+- Renan de Assis Torres - RM 368513
 
 ## Licença
 
