@@ -91,6 +91,9 @@ echo ""
 
 source "$VENV_DIR/bin/activate"
 
+# Filtrar warnings do NNPACK (irrelevante quando usando GPU)
+filter_nnpack() { grep -v "NNPACK.cpp" || true; }
+
 # Treinar
 yolo detect train \
     data="$WORK_DIR/data/data.yaml" \
@@ -103,7 +106,7 @@ yolo detect train \
     exist_ok=True \
     patience=20 \
     save=True \
-    plots=True
+    plots=True 2>&1 | filter_nnpack
 
 # Upload do modelo para S3
 echo ""
