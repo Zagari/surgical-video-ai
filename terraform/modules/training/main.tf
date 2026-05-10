@@ -17,7 +17,7 @@ variable "environment" {
 variable "instance_type" {
   description = "Tipo da instância EC2"
   type        = string
-  default     = "p3.2xlarge"  # GPU V100, ~$3.06/hora
+  default     = "t3.xlarge"  # Temporário para teste - trocar por g4dn.xlarge depois
 }
 
 variable "key_name" {
@@ -51,12 +51,17 @@ data "aws_ami" "deep_learning" {
 
   filter {
     name   = "name"
-    values = ["Deep Learning AMI GPU PyTorch *Ubuntu 20.04*"]
+    values = ["Deep Learning OSS Nvidia Driver AMI GPU PyTorch*Ubuntu*"]
   }
 
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
   }
 }
 

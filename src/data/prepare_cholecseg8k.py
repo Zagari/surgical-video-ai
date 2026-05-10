@@ -34,17 +34,18 @@ from sklearn.model_selection import train_test_split
 
 
 # Configuração das classes de interesse
+# Valores reais encontrados nas máscaras watershed do CholecSeg8k:
+#   23 = Blood (RGB 255, 85, 0 - laranja/vermelho)
+#   50 = Grasper (RGB 127, 127, 127 - cinza)
 CLASSES_OF_INTEREST = {
-    5: "grasper",
-    7: "blood",
-    9: "electrocautery",
+    50: "grasper",
+    23: "blood",
 }
 
 # Mapeamento para YOLO (índices começam em 0)
 YOLO_CLASS_MAP = {
-    5: 0,  # grasper -> 0
-    7: 1,  # blood -> 1
-    9: 2,  # electrocautery -> 2
+    50: 0,  # grasper -> 0
+    23: 1,  # blood -> 1
 }
 
 
@@ -109,20 +110,21 @@ def process_cholecseg8k(input_dir: str, output_dir: str, train_ratio: float = 0.
     # Coletar todos os pares imagem/máscara
     all_samples = []
 
-    # Percorrer estrutura do CholecSeg8k
+    # Percorrer estrutura do CholecSeg8k: video01/video01_00080/frame_*.png
     for video_dir in sorted(input_path.glob("video*")):
-        for frame_file in sorted(video_dir.glob("*.png")):
-            # Pular arquivos de máscara
-            if "_mask" in frame_file.name or "_watershed" in frame_file.name:
-                continue
+        for frame_dir in sorted(video_dir.glob("video*")):
+            for frame_file in sorted(frame_dir.glob("*_endo.png")):
+                # Pular arquivos de máscara
+                if "_mask" in frame_file.name:
+                    continue
 
-            # Encontrar máscara correspondente
-            mask_file = frame_file.with_name(frame_file.stem + "_watershed_mask.png")
-            if not mask_file.exists():
-                mask_file = frame_file.with_name(frame_file.stem + "_mask.png")
+                # Encontrar máscara correspondente
+                mask_file = frame_file.with_name(frame_file.stem + "_watershed_mask.png")
+                if not mask_file.exists():
+                    mask_file = frame_file.with_name(frame_file.stem + "_mask.png")
 
-            if mask_file.exists():
-                all_samples.append((frame_file, mask_file))
+                if mask_file.exists():
+                    all_samples.append((frame_file, mask_file))
 
     print(f"Encontradas {len(all_samples)} amostras válidas")
 
@@ -160,10 +162,10 @@ def process_cholecseg8k(input_dir: str, output_dir: str, train_ratio: float = 0.
                 all_bboxes.extend(bboxes)
                 class_counts[class_name] += len(bboxes)
 
-            # Gerar nome único
-            video_name = img_file.parent.name
+            # Gerar nome único (video01_00080_frame_100_endo)
+            frame_dir_name = img_file.parent.name
             frame_name = img_file.stem
-            unique_name = f"{video_name}_{frame_name}"
+            unique_name = f"{frame_dir_name}_{frame_name}"
 
             # Salvar imagem
             output_img = output_path / split / "images" / f"{unique_name}.jpg"

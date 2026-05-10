@@ -52,7 +52,7 @@ variable "project_name" {
 variable "key_name" {
   description = "Nome da key pair SSH (deve existir na AWS)"
   type        = string
-  default     = "surgical-training-key"
+  default     = "castellabate-key"
 }
 
 # -----------------------------------------------------------------------------
