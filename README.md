@@ -140,8 +140,67 @@ terraform destroy
 
 ```bash
 cd web
+
+# Com GPU NVIDIA (requer nvidia-docker)
 docker-compose up -d
-# Acessar: http://localhost:8000
+
+# Sem GPU (apenas CPU - mais lento, mas funcional)
+docker-compose -f docker-compose.cpu.yml up -d
+
+# Acessar: http://localhost:8100
+```
+
+**Quando usar cada opção:**
+- **GPU**: Processamento em tempo real, demonstrações ao vivo
+- **CPU**: Testes, desenvolvimento local, ambientes sem GPU dedicada
+
+## Interface Web
+
+A interface web permite demonstrar o sistema de detecção de forma interativa.
+
+### Funcionalidades
+
+| Recurso | Descrição |
+|---------|-----------|
+| **Upload de Vídeo** | Envie vídeos do seu computador para análise |
+| **URL de Vídeo** | Cole uma URL (YouTube, etc.) para processar |
+| **Galeria de Exemplos** | Selecione clips do dataset GynSurg pré-carregados no S3 |
+| **Visualização** | Veja detecções em tempo real com bounding boxes |
+| **Download** | Baixe o vídeo anotado e relatório JSON |
+| **Informações** | Dados sobre o modelo, datasets e estratégia |
+
+### Endpoints da API
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/` | GET | Interface web |
+| `/health` | GET | Health check |
+| `/api/video/upload` | POST | Upload de vídeo |
+| `/api/video/url` | POST | Processar URL |
+| `/api/video/status/{job_id}` | GET | Status do processamento |
+| `/api/video/result/{job_id}/video` | GET | Baixar vídeo anotado |
+| `/api/samples/list` | GET | Listar clips de exemplo |
+| `/api/samples/process/{category}/{filename}` | POST | Processar clip |
+| `/api/info/model` | GET | Informações do modelo |
+
+### Estrutura Web
+
+```
+web/
+├── app/
+│   ├── main.py              # FastAPI app
+│   ├── routers/
+│   │   ├── video.py         # Processamento de vídeo
+│   │   ├── samples.py       # Galeria de exemplos
+│   │   └── info.py          # Informações
+│   ├── services/
+│   │   └── detector.py      # Serviço YOLOv8
+│   └── static/              # Frontend (HTML/CSS/JS)
+├── models/                  # Modelo best.pt
+├── Dockerfile
+├── docker-compose.yml       # Deploy com GPU
+├── docker-compose.cpu.yml   # Deploy sem GPU
+└── requirements.txt
 ```
 
 ## Infraestrutura Terraform

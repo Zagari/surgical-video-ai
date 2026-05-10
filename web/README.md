@@ -43,7 +43,7 @@ docker-compose -f docker-compose.cpu.yml up -d
 
 ### 4. Acessar
 
-Abra no navegador: http://localhost:8000
+Abra no navegador: http://localhost:8100
 
 ## Desenvolvimento Local (sem Docker)
 
