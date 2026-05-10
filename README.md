@@ -3,24 +3,54 @@
 Sistema de análise de vídeos cirúrgicos utilizando YOLOv8 customizado para detecção de **sangramento anômalo** e **instrumentos cirúrgicos** em procedimentos ginecológicos.
 
 ## FIAP - Pós-Graduação em Inteligência Artificial para Devs
-**Tech Challenge - Fase 4**
+**Tech Challenge - Fase 4: Análise de Dados**
 
 ---
 
 ## Objetivo
 
-Desenvolver um sistema de visão computacional para:
+Desenvolver um sistema de visão computacional para monitoramento de saúde da mulher:
 - Detectar sangramento anômalo durante cirurgias ginecológicas
 - Identificar instrumentos cirúrgicos em tempo real
 - Gerar alertas automáticos para a equipe médica
 - Produzir relatórios de análise de procedimentos
 
+## Estratégia de Datasets
+
+Este projeto utiliza uma abordagem de **validação cross-dataset** para garantir a generalização do modelo:
+
+| Dataset | Uso | Descrição |
+|---------|-----|-----------|
+| **CholecSeg8k** | Treinamento | 8.080 frames de colecistectomia com máscaras de segmentação pixel-level para sangramento e instrumentos |
+| **GynSurg** | Validação/Demo | Clips de 3 segundos de cirurgias ginecológicas laparoscópicas com labels de bleeding/non-bleeding |
+
+### Por que dois datasets?
+
+1. **CholecSeg8k** fornece anotações precisas (máscaras de segmentação) ideais para treinar o modelo de detecção
+2. **GynSurg** permite validar a capacidade de generalização do modelo em cirurgias ginecológicas reais
+3. Esta abordagem demonstra que o modelo aprende padrões universais de sangramento e instrumentos cirúrgicos
+
+### Estatísticas dos Datasets
+
+**CholecSeg8k (Treinamento)**
+- Total: 8.080 imagens
+- Train: 6.464 imagens | Val: 1.616 imagens
+- Classes: grasper (13.680 instâncias), blood (2.545 instâncias)
+
+**GynSurg Action Recognition (Validação)**
+- Bleeding: 977 clips (3s cada, 4K)
+- Non-bleeding: 1.064 clips
+- Resolução: 3840x2160 @ 30fps
+
 ## Tecnologias
 
 | Componente | Tecnologia |
 |------------|------------|
-| Detecção de Objetos | YOLOv8 (Ultralytics) |
-| Cloud | AWS (SageMaker, S3, Lambda) |
+| Detecção de Objetos | YOLOv8m (Ultralytics) |
+| Backend API | FastAPI |
+| Frontend | HTML/CSS/JavaScript |
+| Container | Docker |
+| Cloud Storage | AWS S3 |
 | IaC | Terraform |
 | Linguagem | Python 3.10+ |
 
@@ -32,116 +62,136 @@ surgical-video-ai/
 │   ├── data/              # Preparação de datasets
 │   ├── models/            # Treinamento YOLOv8
 │   ├── video/             # Processamento de vídeo
-│   ├── reports/           # Geração de relatórios
-│   ├── cloud/             # Integração AWS
-│   └── demo/              # Scripts de demonstração
-├── terraform/             # Infraestrutura como Código
-│   ├── modules/           # Módulos reutilizáveis
-│   └── environments/      # Ambientes (training/inference)
+│   ├── evaluation/        # Avaliação e métricas
+│   └── reports/           # Geração de relatórios
+├── web/                    # Interface Web (FastAPI + Frontend)
+│   ├── app/               # Backend FastAPI
+│   └── Dockerfile         # Container da aplicação
 ├── scripts/               # Scripts de automação
-├── notebooks/             # Jupyter notebooks
+│   ├── server-setup.sh    # Setup do servidor GPU
+│   ├── server-train.sh    # Treinamento YOLOv8
+│   └── server-inference.sh # Inferência em vídeos
+├── terraform/             # Infraestrutura como Código
+│   ├── modules/           # Módulos reutilizáveis (S3, etc)
+│   └── environments/      # Configurações por ambiente
 ├── data/                  # Datasets (não versionado)
 ├── models/                # Modelos treinados (não versionado)
-├── docs/                  # Documentação
-└── tests/                 # Testes automatizados
+└── docs/                  # Documentação
 ```
 
 ## Quick Start
 
 ### 1. Pré-requisitos
 
-```bash
-# Python 3.10+
-python --version
+- Python 3.10+
+- AWS CLI configurado
+- Docker (para interface web)
+- **Para treinamento**: Servidor com GPU NVIDIA **OU** conta AWS com acesso a instâncias GPU
 
-# Terraform
-terraform version
-
-# AWS CLI configurado
-aws sts get-caller-identity
-```
-
-### 2. Instalação
+### 2. Preparar Dataset CholecSeg8k
 
 ```bash
-# Clonar repositório
-git clone https://github.com/SEU_USUARIO/surgical-video-ai.git
-cd surgical-video-ai
-
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou: venv\Scripts\activate  # Windows
-
-# Instalar dependências
-pip install -r requirements.txt
-```
-
-### 3. Preparar Dataset
-
-```bash
-# Extrair CholecSeg8k (se disponível)
-unzip cholecseg8k.zip -d data/raw/
-
-# Preparar para YOLOv8
+# Preparar para formato YOLO
 python src/data/prepare_cholecseg8k.py \
-    --input data/raw/cholecseg8k \
-    --output data/yolo_format \
-    --classes blood
+    --input ./CholecSeg8k \
+    --output data/yolo_format
 ```
 
-### 4. Treinamento (AWS)
+### 3. Treinamento
+
+#### Opção A: Servidor Local com GPU (Recomendado)
 
 ```bash
-# Ligar infraestrutura de treinamento
-./scripts/infra-up-training.sh
+# Copiar scripts para o servidor
+scp -r scripts/ usuario@servidor:~/
 
-# SSH na instância e treinar
-ssh -i your-key.pem ubuntu@<IP>
-cd /home/ubuntu/training && ./train.sh
-
-# Após treino, DESTRUIR infraestrutura
-./scripts/infra-down-training.sh
+# No servidor
+./scripts/server-setup.sh      # Configurar ambiente
+./scripts/server-train.sh      # Treinar modelo (~3-4 horas)
 ```
 
-### 5. Inferência (AWS)
+#### Opção B: AWS com Terraform
 
 ```bash
-# Ligar endpoint de inferência
-./scripts/infra-up-inference.sh
+# Provisionar infraestrutura AWS (requer conta com acesso a instâncias GPU)
+cd terraform/environments/training
+terraform init
+terraform apply
 
-# Testar
-python src/demo/run_demo.py --video videos/input/test.mp4
+# Conectar à instância EC2 criada
+ssh -i ~/.ssh/sua-chave.pem ubuntu@<IP_DA_INSTANCIA>
 
-# Após demo, DESTRUIR endpoint
-./scripts/infra-down-inference.sh
+# Na instância EC2
+./scripts/server-setup.sh
+./scripts/server-train.sh
+
+# IMPORTANTE: Destruir recursos após o treino para evitar custos
+terraform destroy
 ```
 
-## Custos AWS Estimados
+### 4. Validação com GynSurg
 
-| Recurso | Custo/hora | Uso típico | Total |
-|---------|------------|------------|-------|
-| EC2 p3.2xlarge (treino) | $3.06 | ~6 horas | ~$18 |
-| SageMaker g4dn.xlarge (inferência) | $0.53 | ~2 horas/demo | ~$1 |
-| S3 Storage | $0.023/GB/mês | - | ~$0.50 |
+```bash
+# Testar modelo em clips de cirurgia ginecológica
+./scripts/validate-gynsurg.sh /path/to/GynSurg_Action_3sec
+```
 
-**IMPORTANTE**: Sempre execute `terraform destroy` após o uso para evitar custos!
+### 5. Interface Web
 
-## Datasets
+```bash
+cd web
+docker-compose up -d
+# Acessar: http://localhost:8000
+```
 
-| Dataset | Status | Descrição |
-|---------|--------|-----------|
-| [CholecSeg8k](https://www.kaggle.com/datasets/newslab/cholecseg8k) | Disponível | 8.080 frames com segmentação de sangue e instrumentos |
-| [GynSurg](https://github.com/Sahar-Nasiri/GynSurg) | Aguardando acesso | 152 vídeos de cirurgias ginecológicas |
+## Infraestrutura Terraform
+
+O projeto inclui módulos Terraform para provisionar a infraestrutura na AWS:
+
+```
+terraform/
+├── modules/
+│   ├── storage/      # S3 buckets para datasets, modelos e resultados
+│   ├── training/     # EC2 com GPU para treinamento (g4dn.xlarge)
+│   └── inference/    # SageMaker endpoint para inferência
+└── environments/
+    ├── training/     # Ambiente de treinamento
+    └── inference/    # Ambiente de produção
+```
+
+### Custos Estimados AWS
+
+| Recurso | Tipo | Custo/hora | Uso típico |
+|---------|------|------------|------------|
+| EC2 Training | g4dn.xlarge | ~$0.52 | 3-4 horas |
+| S3 Storage | - | ~$0.023/GB/mês | Contínuo |
+| SageMaker | ml.g4dn.xlarge | ~$0.74 | Por demanda |
+
+**⚠️ IMPORTANTE**: Sempre execute `terraform destroy` após o uso para evitar custos!
+
+## Recursos AWS (S3)
+
+| Bucket | Descrição |
+|--------|-----------|
+| `surgical-detection-datasets-dev` | Dataset YOLO (726 MB) |
+| `surgical-detection-models-dev` | Modelos treinados (.pt) |
+| `surgical-detection-results-dev` | Resultados de inferência |
+
+## Classes Detectadas
+
+| ID | Classe | Descrição |
+|----|--------|-----------|
+| 0 | grasper | Pinça de apreensão |
+| 1 | blood | Sangramento detectado |
 
 ## Documentação
 
-- [Plano de Implementação](docs/plano-implementacao-video-analysis.md)
-- [Relatório Técnico](docs/RELATORIO_TECNICO.md) *(em desenvolvimento)*
+- [Checkpoint do Servidor](docs/CHECKPOINT-SERVIDOR.md) - Instruções para execução no servidor
+- [Plano de Implementação](docs/plano-implementacao-video-analysis.md) - Plano original
 
 ## Equipe
 
-FIAP - Pós-Graduação em IA para Devs - Turma XXXX
+FIAP - Pós-Graduação em IA para Devs
 
 ## Licença
 
