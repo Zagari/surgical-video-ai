@@ -136,7 +136,19 @@ terraform destroy
 ./scripts/validate-gynsurg.sh /path/to/GynSurg_Action_3sec
 ```
 
-### 5. Interface Web
+### 5. Baixar Modelo Treinado
+
+Após o treinamento, baixe o modelo para a pasta `web/models/`:
+
+```bash
+# Opção 1: Do S3 (recomendado)
+aws s3 cp s3://surgical-detection-models-dev/trained/best.pt web/models/
+
+# Opção 2: Direto do servidor de treinamento
+scp usuario@servidor:~/surgical-training/results/surgical_detection/weights/best.pt web/models/
+```
+
+### 6. Interface Web
 
 ```bash
 cd web
