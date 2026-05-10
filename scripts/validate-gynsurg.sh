@@ -15,19 +15,54 @@ MODEL_PATH="$WORK_DIR/models/best.pt"
 
 # Verificar argumentos
 if [ -z "$1" ]; then
-    echo "Uso: $0 <caminho_gynsurg_action_3sec> [--upload]"
+    echo "Uso: $0 <caminho_gynsurg_action_3sec> [opções]"
     echo ""
-    echo "Exemplo:"
-    echo "  $0 /path/to/GynSurg_Action_3sec"
-    echo "  $0 /path/to/GynSurg_Action_3sec --upload"
+    echo "Opções:"
+    echo "  --fixed          Usa validation set fixo (requer generate-validation-set.sh primeiro)"
+    echo "  --seed           Usa shuf com seed 42 (reproduzível, mas não usa arquivo fixo)"
+    echo "  --version TAG    Tag de versão do modelo (ex: v1_baseline, v2_classweight)"
+    echo "  --upload         Faz upload dos resultados para S3"
+    echo ""
+    echo "Exemplos:"
+    echo "  $0 /path/to/GynSurg --fixed --version v1_baseline"
+    echo "  $0 /path/to/GynSurg --fixed --version v2_classweight"
+    echo "  $0 /path/to/GynSurg --fixed --version v3_finetuned --upload"
     exit 1
 fi
 
 GYNSURG_PATH="$1"
 UPLOAD_TO_S3=false
-if [ "$2" == "--upload" ]; then
-    UPLOAD_TO_S3=true
-fi
+USE_FIXED_SET=false
+USE_SEED=false
+SEED=42
+MODEL_VERSION="baseline"  # Tag de versão do modelo
+
+# Processar argumentos
+shift  # Remove primeiro argumento (path)
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --upload)
+            UPLOAD_TO_S3=true
+            shift
+            ;;
+        --fixed)
+            USE_FIXED_SET=true
+            shift
+            ;;
+        --seed)
+            USE_SEED=true
+            shift
+            ;;
+        --version)
+            MODEL_VERSION="$2"
+            shift 2
+            ;;
+        *)
+            echo "Opção desconhecida: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # Verificar se diretório existe
 if [ ! -d "$GYNSURG_PATH/GynSurg_bleeding_dataset" ]; then
@@ -38,11 +73,22 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTPUT_DIR="$WORK_DIR/validation_gynsurg_$TIMESTAMP"
 
+# Determinar modo de seleção para exibição
+if [ "$USE_FIXED_SET" = true ]; then
+    SELECTION_MODE="FIXED (validation set file)"
+elif [ "$USE_SEED" = true ]; then
+    SELECTION_MODE="SEED ($SEED - reproduzível)"
+else
+    SELECTION_MODE="RANDOM (não reproduzível)"
+fi
+
 echo "========================================"
 echo "  VALIDAÇÃO GYNSURG - SURGICAL VIDEO AI"
 echo "========================================"
 echo ""
 echo "Dataset: $GYNSURG_PATH"
+echo "Versão do modelo: $MODEL_VERSION"
+echo "Modo de seleção: $SELECTION_MODE"
 echo "Saída: $OUTPUT_DIR"
 
 # Criar diretórios
@@ -76,8 +122,27 @@ BLEEDING_DIR="$GYNSURG_PATH/GynSurg_bleeding_dataset/Bleeding"
 BLEEDING_OUTPUT="$OUTPUT_DIR/bleeding_results"
 mkdir -p "$BLEEDING_OUTPUT"
 
-# Selecionar 10 clips aleatórios para validação rápida
-BLEEDING_CLIPS=$(ls "$BLEEDING_DIR"/*.mp4 | shuf | head -10)
+# Selecionar clips baseado no modo escolhido
+VALIDATION_SET_DIR="$GYNSURG_PATH/validation_sets"
+
+if [ "$USE_FIXED_SET" = true ]; then
+    # Usar arquivo de validation set fixo
+    if [ ! -f "$VALIDATION_SET_DIR/validation_set_bleeding.txt" ]; then
+        echo "❌ Validation set não encontrado. Execute primeiro:"
+        echo "   ./scripts/generate-validation-set.sh $GYNSURG_PATH"
+        exit 1
+    fi
+    echo "   Modo: FIXED (arquivo de validation set)"
+    BLEEDING_CLIPS=$(cat "$VALIDATION_SET_DIR/validation_set_bleeding.txt")
+elif [ "$USE_SEED" = true ]; then
+    # Usar shuf com seed fixo
+    echo "   Modo: SEED ($SEED)"
+    BLEEDING_CLIPS=$(ls "$BLEEDING_DIR"/*.mp4 | shuf --random-source=<(yes $SEED) | head -10)
+else
+    # Usar shuf aleatório (não reproduzível)
+    echo "   Modo: RANDOM (não reproduzível)"
+    BLEEDING_CLIPS=$(ls "$BLEEDING_DIR"/*.mp4 | shuf | head -10)
+fi
 
 for clip in $BLEEDING_CLIPS; do
     clip_name=$(basename "$clip" .mp4)
@@ -103,7 +168,21 @@ NON_BLEEDING_DIR="$GYNSURG_PATH/GynSurg_bleeding_dataset/Non_bleeding"
 NON_BLEEDING_OUTPUT="$OUTPUT_DIR/non_bleeding_results"
 mkdir -p "$NON_BLEEDING_OUTPUT"
 
-NON_BLEEDING_CLIPS=$(ls "$NON_BLEEDING_DIR"/*.mp4 | shuf | head -10)
+if [ "$USE_FIXED_SET" = true ]; then
+    # Usar arquivo de validation set fixo
+    if [ ! -f "$VALIDATION_SET_DIR/validation_set_non_bleeding.txt" ]; then
+        echo "❌ Validation set não encontrado. Execute primeiro:"
+        echo "   ./scripts/generate-validation-set.sh $GYNSURG_PATH"
+        exit 1
+    fi
+    NON_BLEEDING_CLIPS=$(cat "$VALIDATION_SET_DIR/validation_set_non_bleeding.txt")
+elif [ "$USE_SEED" = true ]; then
+    # Usar shuf com seed fixo
+    NON_BLEEDING_CLIPS=$(ls "$NON_BLEEDING_DIR"/*.mp4 | shuf --random-source=<(yes $SEED) | head -10)
+else
+    # Usar shuf aleatório (não reproduzível)
+    NON_BLEEDING_CLIPS=$(ls "$NON_BLEEDING_DIR"/*.mp4 | shuf | head -10)
+fi
 
 for clip in $NON_BLEEDING_CLIPS; do
     clip_name=$(basename "$clip" .mp4)
@@ -181,7 +260,9 @@ non_bleeding_stats = count_detections(non_bleeding_dir)
 # Calcular métricas
 report = {
     "validation_date": datetime.now().isoformat(),
-    "model": "$MODEL_PATH",
+    "model_version": "$MODEL_VERSION",
+    "model_path": "$MODEL_PATH",
+    "selection_mode": "$SELECTION_MODE",
     "dataset": "GynSurg Action Recognition (Bleeding subset)",
     "bleeding_clips": {
         "clips_processed": 10,
