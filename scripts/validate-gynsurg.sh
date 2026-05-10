@@ -215,6 +215,7 @@ echo "[4/5] Gerando relatório de validação..."
 python3 << EOF
 import os
 import json
+import subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -222,8 +223,27 @@ output_dir = Path("$OUTPUT_DIR")
 bleeding_dir = output_dir / "bleeding_results"
 non_bleeding_dir = output_dir / "non_bleeding_results"
 
+def get_video_frame_count(video_path):
+    """Obtém número de frames de um vídeo usando ffprobe."""
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-count_frames",
+            "-show_entries", "stream=nb_read_frames",
+            "-of", "csv=p=0",
+            str(video_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except:
+        pass
+    # Fallback: assume 3 segundos @ 30fps = 90 frames
+    return 90
+
 def count_detections(results_dir, class_names=["grasper", "blood"]):
-    """Conta detecções nos arquivos de labels."""
+    """Conta detecções nos arquivos de labels e frames totais dos vídeos."""
     stats = {name: 0 for name in class_names}
     stats["total_frames"] = 0
     stats["frames_with_blood"] = 0
@@ -232,12 +252,22 @@ def count_detections(results_dir, class_names=["grasper", "blood"]):
     for clip_dir in results_dir.iterdir():
         if not clip_dir.is_dir():
             continue
+
+        # Contar frames reais do vídeo de saída (AVI)
+        avi_files = list(clip_dir.glob("*.avi"))
+        if avi_files:
+            clip_frames = get_video_frame_count(avi_files[0])
+            stats["total_frames"] += clip_frames
+        else:
+            # Se não houver AVI, assumir 90 frames (3s @ 30fps)
+            stats["total_frames"] += 90
+
+        # Contar detecções nos labels
         labels_dir = clip_dir / "labels"
         if not labels_dir.exists():
             continue
 
         for label_file in labels_dir.glob("*.txt"):
-            stats["total_frames"] += 1
             has_blood = False
             has_grasper = False
 
