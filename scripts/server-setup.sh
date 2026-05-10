@@ -50,8 +50,12 @@ echo "[4/5] Instalando dependências..."
 source "$VENV_DIR/bin/activate"
 
 pip install --upgrade pip
-pip install ultralytics torch torchvision --index-url https://download.pytorch.org/whl/cu118
-pip install boto3 opencv-python-headless pyyaml tqdm fpdf2
+
+# Instalar PyTorch com CUDA (do índice oficial)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Instalar ultralytics e outras dependências (do PyPI)
+pip install ultralytics boto3 opencv-python-headless pyyaml tqdm fpdf2
 
 # Verificar instalação
 echo ""
