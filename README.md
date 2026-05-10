@@ -131,10 +131,69 @@ terraform destroy
 
 ### 4. Validação com GynSurg
 
+O sistema de validação permite testar o modelo treinado em clips de cirurgias ginecológicas e comparar diferentes versões do modelo de forma reproduzível.
+
+#### 4.1. Gerar Validation Set Fixo (uma única vez)
+
 ```bash
-# Testar modelo em clips de cirurgia ginecológica
-./scripts/validate-gynsurg.sh /path/to/GynSurg_Action_3sec
+# Cria arquivos com lista fixa de clips para validação reproduzível
+./scripts/generate-validation-set.sh /path/to/GynSurg_Action_3sec
+
+# Opcionalmente, especifique o número de clips (default: 10)
+./scripts/generate-validation-set.sh /path/to/GynSurg_Action_3sec 20
 ```
+
+Arquivos gerados em `GynSurg_Action_3sec/validation_sets/`:
+- `validation_set_bleeding.txt` - Lista de clips com sangramento
+- `validation_set_non_bleeding.txt` - Lista de clips sem sangramento
+
+#### 4.2. Executar Validação
+
+```bash
+# Validação reproduzível com tag de versão do modelo
+./scripts/validate-gynsurg.sh /path/to/GynSurg_Action_3sec --fixed --version v1_baseline
+
+# Com upload para S3
+./scripts/validate-gynsurg.sh /path/to/GynSurg_Action_3sec --fixed --version v1_baseline --upload
+```
+
+**Opções disponíveis:**
+
+| Opção | Descrição |
+|-------|-----------|
+| `--fixed` | Usa o validation set fixo gerado anteriormente |
+| `--seed` | Usa shuf com seed 42 (reproduzível, mas não usa arquivo) |
+| `--version TAG` | Tag de versão do modelo (ex: v1_baseline, v2_classweight) |
+| `--upload` | Faz upload dos resultados para S3 |
+
+Os resultados são salvos em `~/surgical-training/validation_gynsurg_TIMESTAMP/` com:
+- `validation_report.json` - Métricas e versão do modelo
+- `bleeding_results/` - Detecções em clips com sangramento
+- `non_bleeding_results/` - Detecções em clips sem sangramento
+
+#### 4.3. Comparar Validações
+
+```bash
+# Comparar TODAS as validações existentes
+./scripts/compare-validations.sh
+
+# Comparar duas validações específicas
+./scripts/compare-validations.sh validation_gynsurg_20260510_120000 validation_gynsurg_20260510_140000
+```
+
+#### 4.4. Fluxo Recomendado para Iteração do Modelo
+
+1. **Baseline:** `--fixed --version v1_baseline`
+2. **Após ajuste de class weights:** `--fixed --version v2_classweight`
+3. **Após fine-tuning:** `--fixed --version v3_finetuned`
+4. **Comparar progresso:** `./scripts/compare-validations.sh`
+
+#### 4.5. Métricas de Avaliação
+
+| Métrica | Descrição | Meta |
+|---------|-----------|------|
+| **Taxa de Detecção** | % de frames com sangramento detectado em clips de bleeding | > 70% |
+| **Taxa de Falso Positivo** | % de frames com detecção em clips sem bleeding | < 15% |
 
 ### 5. Baixar Modelo Treinado
 
