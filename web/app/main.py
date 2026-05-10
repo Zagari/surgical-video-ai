@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from app.routers import video, info, samples
+from app.routers import video, info, samples, annotation
 
 app = FastAPI(
     title="Surgical Video AI",
@@ -30,6 +30,7 @@ app.add_middleware(
 app.include_router(video.router, prefix="/api/video", tags=["video"])
 app.include_router(info.router, prefix="/api/info", tags=["info"])
 app.include_router(samples.router, prefix="/api/samples", tags=["samples"])
+app.include_router(annotation.router, prefix="/api/annotation", tags=["annotation"])
 
 # Static files
 static_path = Path(__file__).parent / "static"
@@ -40,6 +41,12 @@ app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 async def root():
     """Serve the main page."""
     return FileResponse(str(static_path / "index.html"))
+
+
+@app.get("/annotation")
+async def annotation_page():
+    """Serve the annotation interface page."""
+    return FileResponse(str(static_path / "annotation.html"))
 
 
 @app.get("/health")
