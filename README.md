@@ -68,9 +68,16 @@ surgical-video-ai/
 │   ├── app/               # Backend FastAPI
 │   └── Dockerfile         # Container da aplicação
 ├── scripts/               # Scripts de automação
-│   ├── server-setup.sh    # Setup do servidor GPU
-│   ├── server-train.sh    # Treinamento YOLOv8
-│   └── server-inference.sh # Inferência em vídeos
+│   ├── server-setup.sh           # Setup do servidor GPU
+│   ├── server-train.sh           # Treinamento YOLOv8 (v1 baseline)
+│   ├── server-train-v2-classweight.sh  # Treinamento v2 com class weights
+│   ├── finetune-gynsurg.sh       # Fine-tuning com anotações
+│   ├── validate-gynsurg.sh       # Validação cross-dataset
+│   ├── validate-all-versions.sh  # Validar todas as versões
+│   ├── analyze-threshold.sh      # Análise de thresholds
+│   ├── generate-validation-set.sh # Gerar validation set fixo
+│   ├── compare-validations.sh    # Comparar validações
+│   └── update-web-model.sh       # Atualizar modelo na web
 ├── terraform/             # Infraestrutura como Código
 │   ├── modules/           # Módulos reutilizáveis (S3, etc)
 │   └── environments/      # Configurações por ambiente
@@ -188,26 +195,104 @@ Os resultados são salvos em `~/surgical-training/validation_gynsurg_TIMESTAMP/`
 3. **Após fine-tuning:** `--fixed --version v3_finetuned`
 4. **Comparar progresso:** `./scripts/compare-validations.sh`
 
-#### 4.5. Métricas de Avaliação
+#### 4.5. Análise de Threshold
 
-| Métrica | Descrição | Baseline v1 | Meta |
-|---------|-----------|-------------|------|
-| **Taxa de Detecção** | % de frames com sangramento detectado em clips de bleeding | 7.17% | > 60% |
-| **Taxa de Falso Positivo** | % de frames com detecção em clips sem bleeding | 76.20% | < 20% |
+O script `analyze-threshold.sh` permite testar diferentes thresholds de confiança:
 
-> **Nota**: O baseline v1 apresenta domain shift severo entre CholecSeg8k (treino) e GynSurg (validação), resultando em alta taxa de falsos positivos devido à diferença de coloração entre tecido abdominal e pélvico.
+```bash
+# Testar thresholds padrão (0.1 a 0.7)
+./scripts/analyze-threshold.sh /path/to/GynSurg --version v3_finetuned
+
+# Testar thresholds customizados
+./scripts/analyze-threshold.sh /path/to/GynSurg --version v3_finetuned --thresholds 0.2,0.25,0.3,0.35,0.4
+```
+
+#### 4.6. Validar Todas as Versões
+
+Para comparar todas as versões do modelo de uma só vez:
+
+```bash
+./scripts/validate-all-versions.sh /path/to/GynSurg_Action_3sec
+```
+
+Este script valida automaticamente todas as versões disponíveis e gera um relatório comparativo.
+
+---
+
+## Resultados
+
+### Comparativo de Versões do Modelo
+
+Validação cross-dataset: treino em CholecSeg8k, validação em GynSurg (10 clips bleeding + 10 clips non-bleeding).
+
+| Versão | Descrição | Detecção | Falso Positivo | Status |
+|--------|-----------|----------|----------------|--------|
+| v1_baseline | Treino padrão | 5.41% | 76.11% | ❌ |
+| v2_classweight | cls=3.0 | 12.14% | 46.89% | ⚠️ |
+| **v3_finetuned** | **Fine-tuning com anotações GynSurg** | **91.72%** | **13.44%** | **✅** |
+| v5_negative_only | Fine-tuning só com negativos | 0.00% | 0.00% | ❌ |
+
+### Modelo de Produção: v3_finetuned
+
+O modelo v3 foi selecionado como modelo de produção por atingir ambas as metas do projeto:
+
+| Métrica | Meta | Resultado | Status |
+|---------|------|-----------|--------|
+| Taxa de Detecção | > 60% | **91.72%** | ✅ |
+| Taxa de Falso Positivo | < 20% | **13.44%** | ✅ |
+
+### Análise de Threshold (v3_finetuned)
+
+| Threshold | Detecção | Falso Positivo | Recomendação |
+|-----------|----------|----------------|--------------|
+| 0.10 | 94.48% | 19.33% | Máxima sensibilidade |
+| 0.20 | 93.05% | 14.78% | Alta sensibilidade |
+| **0.30** | **91.72%** | **13.44%** | **Balanço (default)** |
+| 0.40 | 90.07% | 10.67% | Balanço conservador |
+| 0.50 | 88.96% | 9.33% | Menor FP |
+| 0.60 | 87.86% | 6.78% | Melhor score (det-FP) |
+| 0.70 | 85.76% | 4.89% | Mínimo FP |
+
+**Threshold recomendado: 0.30** - Para contexto cirúrgico, é preferível ter mais falsos positivos do que perder detecções de sangramento real.
+
+### Evolução do Modelo
+
+```
+v1 (baseline)     ████░░░░░░░░░░░░░░░░  5.41% det | 76.11% FP
+v2 (classweight)  ██████░░░░░░░░░░░░░░ 12.14% det | 46.89% FP
+v3 (finetuned)    ██████████████████░░ 91.72% det | 13.44% FP ✅
+```
+
+### Estratégia de Fine-tuning
+
+O modelo v3 foi criado através de fine-tuning do v2 com 475 frames anotados manualmente do dataset GynSurg:
+- **Base**: Modelo v2 (treinado com class weights)
+- **Dados**: 475 frames com sangramento + 545 frames sem sangramento
+- **Técnica**: Pseudo-bounding boxes centralizados
+- **Parâmetros**: 30 epochs, lr=0.001, freeze=10 camadas
 
 ### 5. Baixar Modelo Treinado
 
-Após o treinamento, baixe o modelo para a pasta `web/models/`:
+O modelo de produção é o **v3_finetuned** (91.72% detecção, 13.44% FP).
 
 ```bash
-# Opção 1: Do S3 (recomendado)
-aws s3 cp s3://surgical-detection-models-dev/trained/best.pt web/models/
+cd web
+mkdir -p models
 
-# Opção 2: Direto do servidor de treinamento
-scp usuario@servidor:~/surgical-training/results/surgical_detection/weights/best.pt web/models/
+# Baixar modelo v3 do S3 (recomendado)
+aws s3 cp s3://surgical-detection-models-dev/trained/best_v3_finetuned.pt models/best.pt
+
+# Ou baixar o modelo padrão de produção
+aws s3 cp s3://surgical-detection-models-dev/trained/best.pt models/best.pt
 ```
+
+**Modelos disponíveis no S3:**
+| Arquivo | Versão | Descrição |
+|---------|--------|-----------|
+| `best.pt` | v3 | Modelo de produção (recomendado) |
+| `best_v3_finetuned.pt` | v3 | Fine-tuned com anotações GynSurg |
+| `best_v2_classweight.pt` | v2 | Treinado com class weights |
+| `best_v1_baseline.pt` | v1 | Baseline original |
 
 ### 6. Interface Web
 
@@ -265,16 +350,27 @@ web/
 │   ├── routers/
 │   │   ├── video.py         # Processamento de vídeo
 │   │   ├── samples.py       # Galeria de exemplos
-│   │   └── info.py          # Informações
+│   │   ├── info.py          # Informações
+│   │   └── annotation.py    # Interface de anotação
 │   ├── services/
-│   │   └── detector.py      # Serviço YOLOv8
-│   └── static/              # Frontend (HTML/CSS/JS)
-├── models/                  # Modelo best.pt
+│   │   └── detector.py      # Serviço YOLOv8 (threshold: 0.30)
+│   └── static/
+│       ├── index.html       # Interface principal
+│       └── annotation.html  # Interface de anotação
+├── models/                  # Modelo best.pt (v3_finetuned)
 ├── Dockerfile
 ├── docker-compose.yml       # Deploy com GPU
 ├── docker-compose.cpu.yml   # Deploy sem GPU
 └── requirements.txt
 ```
+
+### Interface de Anotação
+
+A interface `/annotation` permite anotar frames do dataset GynSurg para fine-tuning:
+
+- **URL**: `http://localhost:8100/annotation`
+- **Atalhos**: `S` = Sangramento, `N` = Não, `Espaço` = Pular
+- **Exportação**: Gera dataset YOLO para fine-tuning
 
 ## Infraestrutura Terraform
 
@@ -315,6 +411,12 @@ terraform/
 |----|--------|-----------|
 | 0 | grasper | Pinça de apreensão |
 | 1 | blood | Sangramento detectado |
+
+**Configuração de produção:**
+- Modelo: v3_finetuned
+- Threshold de confiança: 0.30
+- Taxa de detecção: 91.72%
+- Taxa de falso positivo: 13.44%
 
 ## Documentação
 
