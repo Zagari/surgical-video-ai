@@ -1,0 +1,25 @@
+# Surgical Video AI - Docker Compose (CPU only)
+# Use this for testing without GPU
+
+version: '3.8'
+
+services:
+  surgical-api:
+    build: .
+    container_name: surgical-video-ai-cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - surgical-uploads:/tmp/surgical-uploads
+      - surgical-results:/tmp/surgical-results
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - MODEL_PATH=/app/models/best.pt
+      - S3_BUCKET=surgical-detection-datasets-dev
+      - AWS_DEFAULT_REGION=us-east-1
+    restart: unless-stopped
+
+volumes:
+  surgical-uploads:
+  surgical-results:

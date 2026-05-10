@@ -1,0 +1,36 @@
+# Surgical Video AI - Docker Compose
+# FIAP Tech Challenge - Fase 4
+
+version: '3.8'
+
+services:
+  surgical-api:
+    build: .
+    container_name: surgical-video-ai
+    ports:
+      - "8000:8000"
+    volumes:
+      # Modelo treinado (montar do host)
+      - ./models:/app/models:ro
+      # Volumes para uploads e resultados
+      - surgical-uploads:/tmp/surgical-uploads
+      - surgical-results:/tmp/surgical-results
+      # AWS credentials (para acesso ao S3)
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - MODEL_PATH=/app/models/best.pt
+      - S3_BUCKET=surgical-detection-datasets-dev
+      - AWS_DEFAULT_REGION=us-east-1
+    # Para usar GPU NVIDIA (requer nvidia-docker)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  surgical-uploads:
+  surgical-results:
