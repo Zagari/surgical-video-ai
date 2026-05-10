@@ -190,10 +190,12 @@ Os resultados são salvos em `~/surgical-training/validation_gynsurg_TIMESTAMP/`
 
 #### 4.5. Métricas de Avaliação
 
-| Métrica | Descrição | Meta |
-|---------|-----------|------|
-| **Taxa de Detecção** | % de frames com sangramento detectado em clips de bleeding | > 70% |
-| **Taxa de Falso Positivo** | % de frames com detecção em clips sem bleeding | < 15% |
+| Métrica | Descrição | Baseline v1 | Meta |
+|---------|-----------|-------------|------|
+| **Taxa de Detecção** | % de frames com sangramento detectado em clips de bleeding | 7.17% | > 60% |
+| **Taxa de Falso Positivo** | % de frames com detecção em clips sem bleeding | 76.20% | < 20% |
+
+> **Nota**: O baseline v1 apresenta domain shift severo entre CholecSeg8k (treino) e GynSurg (validação), resultando em alta taxa de falsos positivos devido à diferença de coloração entre tecido abdominal e pélvico.
 
 ### 5. Baixar Modelo Treinado
 
