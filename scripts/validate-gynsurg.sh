@@ -21,6 +21,7 @@ if [ -z "$1" ]; then
     echo "  --fixed          Usa validation set fixo (requer generate-validation-set.sh primeiro)"
     echo "  --seed           Usa shuf com seed 42 (reproduzível, mas não usa arquivo fixo)"
     echo "  --version TAG    Tag de versão do modelo (ex: v1_baseline, v2_classweight)"
+    echo "  --conf VALUE     Confidence threshold (default: 0.3)"
     echo "  --upload         Faz upload dos resultados para S3"
     echo ""
     echo "Exemplos:"
@@ -36,6 +37,7 @@ USE_FIXED_SET=false
 USE_SEED=false
 SEED=42
 MODEL_VERSION="baseline"  # Tag de versão do modelo
+CONF_THRESHOLD=0.3        # Confidence threshold
 
 # Processar argumentos
 shift  # Remove primeiro argumento (path)
@@ -55,6 +57,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --version)
             MODEL_VERSION="$2"
+            shift 2
+            ;;
+        --conf)
+            CONF_THRESHOLD="$2"
             shift 2
             ;;
         *)
@@ -88,6 +94,7 @@ echo "========================================"
 echo ""
 echo "Dataset: $GYNSURG_PATH"
 echo "Versão do modelo: $MODEL_VERSION"
+echo "Confidence threshold: $CONF_THRESHOLD"
 echo "Modo de seleção: $SELECTION_MODE"
 echo "Saída: $OUTPUT_DIR"
 
@@ -157,7 +164,7 @@ for clip in $BLEEDING_CLIPS; do
         save=True \
         save_txt=True \
         save_conf=True \
-        conf=0.3 \
+        conf=$CONF_THRESHOLD \
         verbose=False 2>&1 | filter_nnpack
 done
 
@@ -197,7 +204,7 @@ for clip in $NON_BLEEDING_CLIPS; do
         save=True \
         save_txt=True \
         save_conf=True \
-        conf=0.3 \
+        conf=$CONF_THRESHOLD \
         verbose=False 2>&1 | filter_nnpack
 done
 
@@ -262,6 +269,7 @@ report = {
     "validation_date": datetime.now().isoformat(),
     "model_version": "$MODEL_VERSION",
     "model_path": "$MODEL_PATH",
+    "confidence_threshold": $CONF_THRESHOLD,
     "selection_mode": "$SELECTION_MODE",
     "dataset": "GynSurg Action Recognition (Bleeding subset)",
     "bleeding_clips": {
