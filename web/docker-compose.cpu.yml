@@ -1,8 +1,6 @@
 # Surgical Video AI - Docker Compose (CPU only)
 # Use this for testing without GPU
 
-version: '3.8'
-
 services:
   surgical-api:
     build: .

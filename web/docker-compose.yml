@@ -1,8 +1,6 @@
 # Surgical Video AI - Docker Compose
 # FIAP Tech Challenge - Fase 4
 
-version: '3.8'
-
 services:
   surgical-api:
     build: .
