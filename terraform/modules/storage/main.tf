@@ -1,6 +1,28 @@
 # =============================================================================
 # Storage Module - S3 Buckets para Datasets e Modelos
 # =============================================================================
+#
+# Estrutura dos Buckets:
+#
+# surgical-detection-datasets-dev/
+# ├── yolo_format/              # Dataset CholecSeg8k em formato YOLO
+# │   ├── train/
+# │   ├── val/
+# │   └── data.yaml
+# └── annotations_v3/           # Anotações do GynSurg para fine-tuning
+#
+# surgical-detection-models-dev/
+# └── trained/
+#     ├── best.pt               # Modelo de produção (v3_finetuned)
+#     ├── best_v1_baseline.pt   # Baseline: 5.41% det, 76.11% FP
+#     ├── best_v2_classweight.pt # Class weights: 12.14% det, 46.89% FP
+#     ├── best_v3_finetuned.pt  # Fine-tuned: 91.72% det, 13.44% FP ✅
+#     └── model.tar.gz          # Pacote para SageMaker
+#
+# surgical-detection-results-dev/
+# └── validation_gynsurg_*/     # Resultados de validação
+#
+# =============================================================================
 
 variable "project_name" {
   description = "Nome do projeto"

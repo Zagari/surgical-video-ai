@@ -3,6 +3,11 @@
 # =============================================================================
 # Custo estimado: ~$0.53/hora (SageMaker ml.g4dn.xlarge)
 # Para desligar: ./scripts/infra-down-inference.sh
+#
+# Modelo de produção: v3_finetuned
+# - Detecção: 91.72%
+# - Falso Positivo: 13.44%
+# - Threshold: 0.30
 # =============================================================================
 
 terraform {
@@ -55,15 +60,29 @@ variable "models_bucket" {
   default     = "surgical-detection-models-dev"
 }
 
+variable "model_version" {
+  description = "Versão do modelo a usar (v1_baseline, v2_classweight, v3_finetuned)"
+  type        = string
+  default     = "v3_finetuned"
+}
+
+variable "confidence_threshold" {
+  description = "Threshold de confiança para detecções (0.0-1.0)"
+  type        = number
+  default     = 0.30
+}
+
 # -----------------------------------------------------------------------------
 # Inference Module (SageMaker Endpoint)
 # -----------------------------------------------------------------------------
 module "inference" {
   source = "../../modules/inference"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  models_bucket_name = var.models_bucket
+  project_name         = var.project_name
+  environment          = var.environment
+  models_bucket_name   = var.models_bucket
+  model_version        = var.model_version
+  confidence_threshold = var.confidence_threshold
 }
 
 # -----------------------------------------------------------------------------
@@ -82,6 +101,16 @@ output "endpoint_arn" {
 output "model_name" {
   description = "Nome do modelo SageMaker"
   value       = module.inference.model_name
+}
+
+output "model_version" {
+  description = "Versão do modelo em uso"
+  value       = module.inference.model_version
+}
+
+output "confidence_threshold" {
+  description = "Threshold de confiança configurado"
+  value       = module.inference.confidence_threshold
 }
 
 output "invoke_example" {

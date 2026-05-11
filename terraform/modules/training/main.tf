@@ -168,53 +168,81 @@ resource "aws_instance" "training" {
     #!/bin/bash
     set -e
 
+    # ==========================================================================
+    # User Data - Setup inicial da instância de treinamento
+    # Os scripts de treinamento são baixados do repositório para manter
+    # consistência e facilitar atualizações.
+    # ==========================================================================
+
+    WORK_DIR="/home/ubuntu/surgical-training"
+    REPO_URL="https://github.com/Zagari/surgical-video-ai.git"
+
     # Criar diretório de trabalho
-    mkdir -p /home/ubuntu/training
-    cd /home/ubuntu/training
+    mkdir -p $WORK_DIR
+    cd /home/ubuntu
 
-    # Criar script de treinamento
-    cat > train.sh << 'TRAIN_SCRIPT'
+    # Clonar repositório com scripts atualizados
+    echo "Clonando repositório..."
+    git clone $REPO_URL surgical-video-ai || true
+
+    # Copiar scripts para diretório de trabalho
+    cp -r surgical-video-ai/scripts $WORK_DIR/
+
+    # Dar permissão de execução
+    chmod +x $WORK_DIR/scripts/*.sh
+
+    # Criar ambiente virtual Python
+    echo "Criando ambiente virtual..."
+    python3 -m venv /home/ubuntu/surgical-venv
+    source /home/ubuntu/surgical-venv/bin/activate
+    pip install --upgrade pip
+    pip install ultralytics boto3 opencv-python
+
+    # Ajustar permissões
+    chown -R ubuntu:ubuntu /home/ubuntu/surgical-training
+    chown -R ubuntu:ubuntu /home/ubuntu/surgical-venv
+    chown -R ubuntu:ubuntu /home/ubuntu/surgical-video-ai
+
+    # Criar script de conveniência
+    cat > /home/ubuntu/train.sh << 'CONVENIENCE_SCRIPT'
     #!/bin/bash
-    set -e
+    # Script de conveniência para treinamento
+    #
+    # Modelos disponíveis:
+    #   v1 (baseline):     ./scripts/server-train.sh
+    #   v2 (class weights): ./scripts/server-train-v2-classweight.sh
+    #   v3 (fine-tuning):  ./scripts/finetune-gynsurg.sh
+    #
+    # Modelo de produção atual: v3_finetuned (91.72% det, 13.44% FP)
 
-    # Ativar ambiente conda
-    source /opt/conda/etc/profile.d/conda.sh
-    conda activate pytorch
+    source /home/ubuntu/surgical-venv/bin/activate
+    cd /home/ubuntu/surgical-training
 
-    # Instalar dependências
-    pip install ultralytics boto3
+    echo "=========================================="
+    echo "  SURGICAL VIDEO AI - TREINAMENTO"
+    echo "=========================================="
+    echo ""
+    echo "Scripts disponíveis:"
+    echo "  1. ./scripts/server-train.sh           - v1 baseline"
+    echo "  2. ./scripts/server-train-v2-classweight.sh - v2 com class weights"
+    echo "  3. ./scripts/finetune-gynsurg.sh       - v3 fine-tuning"
+    echo ""
+    echo "Para validação:"
+    echo "  ./scripts/validate-gynsurg.sh <path_gynsurg> --fixed --version <tag>"
+    echo ""
+    CONVENIENCE_SCRIPT
 
-    # Baixar dataset do S3
-    echo "Baixando dataset do S3..."
-    aws s3 sync s3://surgical-detection-datasets-dev/yolo_format/ ./data/
+    chmod +x /home/ubuntu/train.sh
+    chown ubuntu:ubuntu /home/ubuntu/train.sh
 
-    # Treinar modelo
-    echo "Iniciando treinamento..."
-    yolo detect train \
-      data=./data/data.yaml \
-      model=yolov8m.pt \
-      epochs=100 \
-      imgsz=640 \
-      batch=16 \
-      name=surgical_detection \
-      project=./results
-
-    # Upload do modelo para S3
-    echo "Fazendo upload do modelo..."
-    aws s3 cp ./results/surgical_detection/weights/best.pt s3://surgical-detection-models-dev/trained/
-
-    # Criar model.tar.gz para SageMaker
-    cd ./results/surgical_detection/weights/
-    tar -czvf model.tar.gz best.pt
-    aws s3 cp model.tar.gz s3://surgical-detection-models-dev/trained/model.tar.gz
-
-    echo "Treinamento concluído!"
-    TRAIN_SCRIPT
-
-    chmod +x train.sh
-    chown -R ubuntu:ubuntu /home/ubuntu/training
-
-    echo "Setup concluído. Execute: cd /home/ubuntu/training && ./train.sh"
+    echo ""
+    echo "=========================================="
+    echo "  SETUP CONCLUÍDO!"
+    echo "=========================================="
+    echo ""
+    echo "Para começar, execute:"
+    echo "  ./train.sh"
+    echo ""
   EOF
 
   tags = {
