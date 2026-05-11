@@ -58,33 +58,98 @@ Este projeto utiliza uma abordagem de **validação cross-dataset** para garanti
 
 ```
 surgical-video-ai/
-├── src/                    # Código-fonte Python
-│   ├── data/              # Preparação de datasets
-│   ├── models/            # Treinamento YOLOv8
-│   ├── video/             # Processamento de vídeo
-│   ├── evaluation/        # Avaliação e métricas
-│   └── reports/           # Geração de relatórios
-├── web/                    # Interface Web (FastAPI + Frontend)
-│   ├── app/               # Backend FastAPI
-│   └── Dockerfile         # Container da aplicação
-├── scripts/               # Scripts de automação
-│   ├── server-setup.sh           # Setup do servidor GPU
-│   ├── server-train.sh           # Treinamento YOLOv8 (v1 baseline)
-│   ├── server-train-v2-classweight.sh  # Treinamento v2 com class weights
-│   ├── finetune-gynsurg.sh       # Fine-tuning com anotações
-│   ├── validate-gynsurg.sh       # Validação cross-dataset
-│   ├── validate-all-versions.sh  # Validar todas as versões
-│   ├── analyze-threshold.sh      # Análise de thresholds
-│   ├── generate-validation-set.sh # Gerar validation set fixo
-│   ├── compare-validations.sh    # Comparar validações
-│   └── update-web-model.sh       # Atualizar modelo na web
-├── terraform/             # Infraestrutura como Código
-│   ├── modules/           # Módulos reutilizáveis (S3, etc)
-│   └── environments/      # Configurações por ambiente
-├── data/                  # Datasets (não versionado)
-├── models/                # Modelos treinados (não versionado)
-└── docs/                  # Documentação
+│
+├── web/                           # APLICAÇÃO WEB (FastAPI + Frontend)
+│   ├── app/
+│   │   ├── main.py                # Entry point FastAPI
+│   │   ├── routers/
+│   │   │   ├── video.py           # Upload e processamento de vídeo
+│   │   │   ├── samples.py         # Galeria de clips de exemplo (S3)
+│   │   │   ├── info.py            # Info do modelo e métricas
+│   │   │   └── annotation.py      # Interface de anotação (fine-tuning)
+│   │   ├── services/
+│   │   │   └── detector.py        # Serviço YOLOv8 (threshold: 0.30)
+│   │   └── static/
+│   │       ├── index.html         # Interface principal
+│   │       ├── annotation.html    # Interface de anotação
+│   │       └── js/app.js          # JavaScript do frontend
+│   ├── models/                    # Modelos .pt (montado no container)
+│   ├── docker-compose.yml         # Deploy com GPU
+│   └── docker-compose.cpu.yml     # Deploy sem GPU
+│
+├── scripts/                       # SCRIPTS DE AUTOMAÇÃO
+│   │
+│   │ # Treinamento
+│   ├── server-setup.sh            # Configura servidor GPU
+│   ├── server-train.sh            # Treino v1 (baseline)
+│   ├── server-train-v2-classweight.sh  # Treino v2 (cls=3.0)
+│   ├── finetune-gynsurg.sh        # Fine-tuning v3 com anotações
+│   │
+│   │ # Validação
+│   ├── generate-validation-set.sh # Gera set fixo reproduzível
+│   ├── validate-gynsurg.sh        # Valida uma versão do modelo
+│   ├── validate-all-versions.sh   # Valida todas as versões
+│   ├── analyze-threshold.sh       # Testa diferentes thresholds
+│   ├── compare-validations.sh     # Compara resultados
+│   └── update-web-model.sh        # Atualiza modelo na aplicação web
+│
+├── src/                           # CÓDIGO PYTHON
+│   ├── data/
+│   │   └── prepare_cholecseg8k.py # Converte CholecSeg8k → formato YOLO
+│   ├── inference/
+│   │   └── processor.py           # Processador de vídeo
+│   └── reports/
+│       └── generator.py           # Gerador de relatórios
+│
+├── anotacoes-gynsurg/             # DADOS DE ANOTAÇÃO (fine-tuning v3)
+│   └── yolo_export/
+│       ├── images/train/          # 1020 frames anotados
+│       ├── labels/train/          # 1020 labels YOLO
+│       └── data.yaml              # Config do dataset
+│
+├── terraform/                     # INFRAESTRUTURA AWS (IaC)
+│   ├── modules/                   # S3, EC2, SageMaker
+│   └── environments/              # training, inference
+│
+├── data/                          # Datasets (não versionado)
+├── models/                        # Modelos (não versionado)
+├── docs/                          # Documentação e relatórios
+└── README.md                      # Este arquivo
 ```
+
+## Fluxo de Trabalho
+
+O modelo de produção (v3_finetuned) foi desenvolvido em 3 fases:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FASE 1: BASELINE                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  CholecSeg8k (8080 imgs) ──▶ server-train.sh ──▶ v1_baseline               │
+│                                                   5.41% det | 76.11% FP     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FASE 2: CLASS WEIGHTS                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Ajuste cls=3.0 ──▶ server-train-v2-classweight.sh ──▶ v2_classweight      │
+│  (compensa desbalanceamento 5.4:1)                    12.14% det | 46.89% FP│
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FASE 3: FINE-TUNING                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Interface /annotation ──▶ 1020 frames anotados ──▶ finetune-gynsurg.sh    │
+│  (475 bleeding + 545 non-bleeding)                                          │
+│                                                    ▼                        │
+│                                             v3_finetuned ✅                 │
+│                                             91.72% det | 13.44% FP          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Validação:** Todos os modelos são validados no dataset GynSurg (cirurgias ginecológicas) usando um validation set fixo de 20 clips (10 bleeding + 10 non-bleeding) para garantir comparações reproduzíveis.
 
 ## Quick Start
 
