@@ -371,8 +371,8 @@ async function loadInfo() {
             <p><strong>${strategy.title}</strong></p>
             <p>${strategy.description}</p>
             <p class="small" style="margin-top: 10px;">
-                Treino em ${strategy.approach.training.type},
-                validação em ${strategy.approach.validation.type}
+                <strong>Resultado:</strong> ${strategy.final_metrics.detection_rate} detecção,
+                ${strategy.final_metrics.false_positive_rate} falso positivo
             </p>
         `;
 
